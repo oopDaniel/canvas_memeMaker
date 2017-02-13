@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+  <title>MemeMaker-Simple</title>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <style>
+    #image-container {
+      display: flex;
+      margin-left: 8px;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+    }
+
+  </style>
+</head>
+
+<body>
+
+  <div style="margin: 8px">
+    <input type="file" id="file" />
+  </div>
+  <div id="image-container">
+    <canvas width="500" height="500"></canvas>
+    <div style="margin-left: 8px">
+      <span>Top Line:</span><br/>
+      <input id="topLineText" type="text"><br/>
+      <span>Bottom Line:</span><br/>
+      <input id="bottomLineText" type="text"><br/>
+      <button id="saveBtn">Save</button>
+      <button id="grey">To Grey Scale!</button>
+    </div>
+  </div>
+  <script>
+    var imgWorker = new Worker('imgWorker.js');
+    var $ = document.querySelector.bind(document);
+
+    function textChangeListener (evt) {
+      var id = evt.target.id;
+      var text = evt.target.value;
+
+      if (id == 'topLineText') {
+        window.topLineText = text;
+      } else {
+        window.bottomLineText = text;
+      }
+
+      var imgSrc = window.greyImgSrc || window.imageSrc;
+      redrawMeme(imgSrc, window.topLineText, window.bottomLineText);
+    }
+
+    function redrawMeme(image, topLine, bottomLine) {
+      // Get Canvas2DContext
+      var canvas = $('canvas');
+      var ctx    = canvas.getContext('2d');
+
+      if (image)
+        ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+      ctx.textAlign   = 'center';
+      ctx.font        = '36px Impact';
+      ctx.fillStyle   = '#fff';
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth   = 3;
+
+      if (topLine) {
+        ctx.fillText(topLine, canvas.width / 2, 40);
+        ctx.strokeText(topLine, canvas.width / 2, 40);
+      }
+
+      if (bottomLine) {
+        ctx.fillText(bottomLine, canvas.width / 2, canvas.height - 20);
+        ctx.strokeText(bottomLine, canvas.width / 2, canvas.height - 20);
+      }
+    }
+
+    function saveFile() {
+      window.open($('canvas').toDataURL());
+    }
+
+    function convertImg() {
+      if (window.greyImgSrc !== undefined) return;
+
+      var canvas = $('canvas');
+      var ctx = canvas.getContext('2d');
+
+      var imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      imgWorker.postMessage(imgData);
+
+      imgWorker.onmessage = function(e) {
+        var processedImage = e.data;
+        if (processedImage) {
+          ctx.putImageData(processedImage, 0, 0);
+
+          var image = new Image();
+          var imageDataURL = canvas.toDataURL('image/png');
+          image.onload = function() {
+            window.greyImgSrc = this;
+          }
+          image.src = imageDataURL;
+        } else {
+          console.log('No image');
+        }
+      };
+
+      imgWorker.onerror = function(err) {
+        function workerException(err, msg) {
+          this.name = 'WorkerException';
+          this.message = msg;
+          this.error = err;
+        }
+        throw new workerException(err, 'Worker error!')
+      };
+    }
+
+
+    function handleFileSelect(evt) {
+      var canvasWidth = 500;
+      var canvasHeight = 500;
+      var file = evt.target.files[0];
+
+      var reader = new FileReader();
+      reader.onload = function(fileObject) {
+        var data = fileObject.target.result;
+
+        // Create an image object
+        var image = new Image();
+        image.onload = function() {
+          window.imageSrc = this;
+          redrawMeme(window.imageSrc, null, null);
+        }
+
+        // Set image data to background image.
+        image.src = data;
+      };
+      reader.readAsDataURL(file)
+    }
+
+    window.topLineText = '';
+    window.bottomLineText = '';
+    var input1 = document.getElementById('topLineText');
+    var input2 = document.getElementById('bottomLineText');
+    input1.oninput = textChangeListener;
+    input2.oninput = textChangeListener;
+    document.getElementById('file').addEventListener('change', handleFileSelect, false);
+    document.getElementById('saveBtn').addEventListener('click', saveFile, false);
+    document.getElementById('grey').addEventListener('click', convertImg, false);
+  </script>
+
+</body>
+</html>
